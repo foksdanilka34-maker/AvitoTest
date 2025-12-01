@@ -3,8 +3,6 @@ package team
 import (
 	"AvitoTest/internal/core/team"
 	"AvitoTest/internal/models"
-	"context"
-	"fmt"
 	"log"
 
 	"encoding/json"
@@ -25,6 +23,7 @@ func (h *TeamsHandler) InitRoutes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /team/add", h.AddTeam)
+	mux.HandleFunc("GET /team/get", h.GetTeam)
 
 	return mux
 }
@@ -40,9 +39,8 @@ func (h *TeamsHandler) AddTeam(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(message)
 		return
 	}
-	fmt.Println(request.TeamName, request.Members)
 
-	res, err := h.core.TeamAdd(context.Background(), request.TeamName, request.Members)
+	res, err := h.core.TeamAdd(r.Context(), request.TeamName, request.Members)
 	if err != nil {
 		log.Println(err)
 		w.Header().Set("Content-Type", "application/json")
@@ -66,3 +64,33 @@ func (h *TeamsHandler) AddTeam(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func (h *TeamsHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
+	teamName := r.URL.Query().Get("team_name")
+	if teamName == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		message := &models.Response{
+			Message: "bad data request",
+		}
+		json.NewEncoder(w).Encode(message)
+		return
+	}
+	res, err := h.core.GetTeam(r.Context(), teamName)
+	if err != nil {
+		log.Println(err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		message := &models.Response{
+			Message: "users not found",
+		}
+		json.NewEncoder(w).Encode(message)
+		return
+	}
+	response := &models.CreateTeamResponse{
+		TeamName: res.TeamName,
+		Users: res.Users,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}

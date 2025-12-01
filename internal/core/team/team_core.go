@@ -3,8 +3,9 @@ package team
 import (
 	"context"
 
-	repo "AvitoTest/internal/repository/team"
 	"AvitoTest/internal/models"
+	repo "AvitoTest/internal/repository/team"
+
 )
 
 type team struct {
@@ -13,6 +14,7 @@ type team struct {
 
 type TeamLogic interface {
 	TeamAdd(ctx context.Context, teamName string, users []*models.Users) (*models.Teams, error)
+	GetTeam(ctx context.Context, teamName string) (*models.Teams, error)
 }
 
 func NewTeam(tRepo *repo.Team) TeamLogic {
@@ -23,4 +25,8 @@ func NewTeam(tRepo *repo.Team) TeamLogic {
 
 func (t *team) TeamAdd(ctx context.Context, teamName string, users []*models.Users) (*models.Teams, error) {
 	return t.tRepo.CreateTeam(ctx, teamName, users)
+}
+
+func (t *team) GetTeam(ctx context.Context, teamName string) (*models.Teams, error) {
+	return t.tRepo.GetTeam(ctx, teamName)
 }

@@ -2,6 +2,7 @@ package team
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"log"
@@ -23,12 +24,12 @@ func NewTeam(pgx *pgxpool.Pool) *Team {
 }
 
 func (t *Team) CreateTeam(ctx context.Context, teamName string, users []*models.Users) (*models.Teams, error) {
-	fmt.Println(users)
 	queryCreateTeam := `INSERT INTO teams (team_name) VALUES ($1)
 						ON CONFLICT (team_name) DO
 						UPDATE SET team_name = EXCLUDED.team_name
 						RETURNING team_id`
 	teamResult := models.Teams{}
+	teamResult.TeamName = teamName
 	tx, err := t.pgx.Begin(ctx)
 	if err != nil {
 		log.Println("failed to begin tx", err)
@@ -79,4 +80,31 @@ func (t *Team) CreateTeam(ctx context.Context, teamName string, users []*models.
 	}
 
 	return &teamResult, nil
+}
+
+func (t *Team) GetTeam(ctx context.Context, teamName string) (*models.Teams, error) {
+	querySelectUser := `SELECT users.user_name, 
+						users.is_active, users.team_id
+						FROM public.users
+						LEFT JOIN teams ON teams.team_id = users.team_id
+						WHERE teams.team_name = ($1)`
+	
+	rows, err := t.pgx.Query(ctx, querySelectUser, teamName)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("team not finded")
+		}
+		return nil, fmt.Errorf("error getting team")
+	}
+
+	users := []*models.Users{}
+	for rows.Next() {
+		var user models.Users
+		err = rows.Scan(&user.UserName, &user.IsActive, &user.TeamID)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning users %v", err)
+		}
+		users = append(users, &user)
+	}
+	return &models.Teams{TeamID: users[0].TeamID, TeamName: teamName, Users: users}, nil
 }

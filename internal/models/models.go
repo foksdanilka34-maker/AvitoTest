@@ -6,7 +6,7 @@ import (
 
 
 type Users struct {
-	UserID 		uuid.UUID  `json:"user_id,omitempty"`
+	UserID 		*uuid.UUID  `json:"-"`
 	UserName 	string	   `json:"user_name"`
 	IsActive 	bool	   `json:"is_active"`
 	TeamID 		uuid.UUID  `json:"team_id,omitempty"`
