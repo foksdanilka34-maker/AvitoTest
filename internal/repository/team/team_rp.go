@@ -9,6 +9,7 @@ import (
 
 	"AvitoTest/internal/models"
 
+	"github.com/gofrs/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -107,4 +108,20 @@ func (t *Team) GetTeam(ctx context.Context, teamName string) (*models.Teams, err
 		users = append(users, &user)
 	}
 	return &models.Teams{TeamID: users[0].TeamID, TeamName: teamName, Users: users}, nil
+}
+
+func (t *Team) UserSetActive(ctx context.Context, userID uuid.UUID, isActive bool) (*models.UserSetResponse, error) {
+	userActiveSetQuery := `UPDATE users SET is_active = ($1) WHERE user_id = ($2)
+						   RETURNING user_id, user_name, is_active, 
+						   (SELECT team_name FROM teams WHERE teams.team_id = users.team_id) AS team_name`
+	user := &models.UserSetResponse{}
+	err := t.pgx.QueryRow(ctx, userActiveSetQuery, isActive, userID).Scan(
+		&user.UserID, &user.UserName, 
+		&user.IsActive, &user.TeamName)
+
+	if err != nil {
+		log.Println("error getting user", err)
+		return nil, fmt.Errorf("error getting user %v", err)
+	}
+	return user, nil
 }

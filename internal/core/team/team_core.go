@@ -6,6 +6,7 @@ import (
 	"AvitoTest/internal/models"
 	repo "AvitoTest/internal/repository/team"
 
+	"github.com/gofrs/uuid"
 )
 
 type team struct {
@@ -15,6 +16,7 @@ type team struct {
 type TeamLogic interface {
 	TeamAdd(ctx context.Context, teamName string, users []*models.Users) (*models.Teams, error)
 	GetTeam(ctx context.Context, teamName string) (*models.Teams, error)
+	SetUserStatus(ctx context.Context, userID uuid.UUID, isActive bool) (*models.UserSetResponse, error)
 }
 
 func NewTeam(tRepo *repo.Team) TeamLogic {
@@ -29,4 +31,8 @@ func (t *team) TeamAdd(ctx context.Context, teamName string, users []*models.Use
 
 func (t *team) GetTeam(ctx context.Context, teamName string) (*models.Teams, error) {
 	return t.tRepo.GetTeam(ctx, teamName)
+}
+
+func (t *team) SetUserStatus(ctx context.Context, userID uuid.UUID, isActive bool) (*models.UserSetResponse, error) {
+	return t.tRepo.UserSetActive(ctx, userID, isActive)
 }

@@ -24,6 +24,7 @@ func (h *TeamsHandler) InitRoutes() http.Handler {
 
 	mux.HandleFunc("POST /team/add", h.AddTeam)
 	mux.HandleFunc("GET /team/get", h.GetTeam)
+	mux.HandleFunc("POST /users/setIsActive", h.SetUserStatus)
 
 	return mux
 }
@@ -93,4 +94,30 @@ func (h *TeamsHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+func (h *TeamsHandler) SetUserStatus(w http.ResponseWriter, r *http.Request) {
+	req := &models.ChangeUserStatus{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		message := &models.Response{
+			Message: "bad data request",
+		}
+		json.NewEncoder(w).Encode(message)
+		return
+	}
+	user, err := h.core.SetUserStatus(r.Context(), req.UserID, req.IsActive)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		message := &models.Response{
+			Message: "user not found",
+		}
+		json.NewEncoder(w).Encode(message)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(user)
 }
