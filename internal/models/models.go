@@ -2,6 +2,7 @@ package models
 
 import (
 	"github.com/gofrs/uuid"
+	"time"
 )
 
 const (
@@ -53,9 +54,10 @@ type ChangeUserStatus struct {
 }
 
 type PullRequest struct {
-	PullReqID uuid.UUID `json:"pull_request_id"`
-	PullReqName string `json:"pull_request_name"`
+	PullReqID uuid.UUID `json:"pull_request_id,omitempty"`
 	AuthorID uuid.UUID `json:"author_id"`
-	Status string `json:"status"`
+	PullReqName string `json:"pull_request_name"`
+	Status string 		`json:"status,omitempty"`
 	AssignedReviewes [2]*uuid.UUID `json:"assigned_reviewers,omitempty"`
+	CreatedAt *time.Time `json:"-"`
 }

@@ -19,14 +19,10 @@ func NewTeamsHandler(c team.TeamLogic) *TeamsHandler {
 	}
 }
 
-func (h *TeamsHandler) InitRoutes() http.Handler {
-	mux := http.NewServeMux()
-
+func (h *TeamsHandler) ReqisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /team/add", h.AddTeam)
 	mux.HandleFunc("GET /team/get", h.GetTeam)
 	mux.HandleFunc("POST /users/setIsActive", h.SetUserStatus)
-
-	return mux
 }
 
 func (h *TeamsHandler) AddTeam(w http.ResponseWriter, r *http.Request) {

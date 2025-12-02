@@ -9,7 +9,11 @@ import (
 
 	core "AvitoTest/internal/core/team"
 	rep "AvitoTest/internal/repository/team"
-	handl "AvitoTest/internal/server/team"
+	handlTeam "AvitoTest/internal/server/team"
+
+	corePR "AvitoTest/internal/core/pullrequest"
+	repPR "AvitoTest/internal/repository/pullrequest"
+	handlPR "AvitoTest/internal/server/pullrequest"
 )
 
 func main() {
@@ -28,9 +32,15 @@ func main() {
 
 	repo := rep.NewTeam(conn)
 	core := core.NewTeam(repo)
-	handler := handl.NewTeamsHandler(core)
+	handlerTeam := handlTeam.NewTeamsHandler(core)
 
-	mux := handler.InitRoutes()
+	repoPR := repPR.NewPullReq(conn)
+	corePR := corePR.NewPullReq(repoPR)
+	handlerPR := handlPR.NewTeamsHandler(corePR)
+
+	mux := http.NewServeMux()
+	handlerTeam.ReqisterRoutes(mux)
+	handlerPR.ReqisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:    ":8080",
