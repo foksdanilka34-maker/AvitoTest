@@ -3,7 +3,6 @@ package pullrequest
 import (
 	"AvitoTest/internal/core/pullrequest"
 	"AvitoTest/internal/models"
-	"fmt"
 
 	"log"
 
@@ -27,7 +26,6 @@ func (h *PullRequestHandler) ReqisterRoutes(mux *http.ServeMux) {
 
 func (h *PullRequestHandler) CreatePullRequest(w http.ResponseWriter, r *http.Request) {
 	pulRequest := &models.PullRequest{}
-	fmt.Println(pulRequest)
 	if err := json.NewDecoder(r.Body).Decode(pulRequest); err != nil {
 		log.Println(err)
 		http.Error(w, "error decoding json", http.StatusBadRequest)

@@ -15,8 +15,8 @@ const (
 )
 
 type Users struct {
-	UserID 		uuid.UUID  `json:"-"`
-	TeamID 		uuid.UUID  `json:"team_id,omitempty"`
+	TeamID 		uuid.UUID  `json:"-"`
+	UserID 		uuid.UUID  `json:"user_id"`
 	UserName 	string	   `json:"user_name"`
 	IsActive 	bool	   `json:"is_active"`
 }
@@ -58,6 +58,6 @@ type PullRequest struct {
 	AuthorID uuid.UUID `json:"author_id"`
 	PullReqName string `json:"pull_request_name"`
 	Status string 		`json:"status,omitempty"`
-	AssignedReviewes [2]*uuid.UUID `json:"assigned_reviewers,omitempty"`
+	AssignedReviewes 	[]uuid.UUID `json:"assigned_reviewers,omitempty"`
 	CreatedAt *time.Time `json:"-"`
 }
