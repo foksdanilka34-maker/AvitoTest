@@ -334,3 +334,38 @@ func (p *PullReq) GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.
 
 	return reviewerPR, nil
 }
+
+func (p *PullReq) GetStats(ctx context.Context) (*models.GetStatsResponse, error) {
+	queryStats := `SELECT 
+					u.user_name,
+					COUNT(CASE WHEN pr.status = 'OPEN' THEN 1 END) AS open_tasks,
+					COUNT(CASE WHEN pr.status = 'MERGED' THEN 1 END) AS merged_tasks,
+					COUNT(*) AS total_tasks
+					FROM pr_reviewers r
+					JOIN pull_requests pr ON pr.request_id = r.request_id
+					JOIN users u ON r.reviewer_id = u.user_id
+					WHERE pr.status IN ('OPEN', 'MERGED')  
+					GROUP BY u.user_name`
+	
+	rows, err := p.pgx.Query(ctx, queryStats)
+	if err != nil {
+		return nil, fmt.Errorf("error quuery stat scan %v", err)
+	}
+
+	response := &models.GetStatsResponse{}
+	for rows.Next() {
+		stats := &models.Stats{}
+		err = rows.Scan(
+			&stats.Name,
+			&stats.OpenTasks,
+			&stats.MergedTasks,
+			&stats.TotalTask,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning stats %v", err)
+		}
+		stats.MergedTasksRate = float64(stats.MergedTasks) / float64(stats.TotalTask) * 100
+		response.Stats = append(response.Stats, stats)
+	}
+	return response, nil
+}

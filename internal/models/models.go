@@ -95,3 +95,15 @@ type GetPullRequestReview struct {
 type GetPullRequestReviewResponse struct {
 	PullRequests []*GetPullRequestReview `json:"pull_requests"`
 }
+
+type Stats struct {
+	Name string `json:"name"`
+	OpenTasks int `json:"open_tasks"`
+	MergedTasks int `json:"merged_tasks"`
+	TotalTask int `json:"total_tasks"`
+	MergedTasksRate float64 `json:"merged_rate"`
+}
+
+type GetStatsResponse struct {
+	Stats []*Stats `json:"stats_response"`
+}
