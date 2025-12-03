@@ -54,7 +54,7 @@ func (h *TeamsHandler) AddTeam(w http.ResponseWriter, r *http.Request) {
 
 	response := &models.CreateTeamResponse{
 		TeamName: res.TeamName,
-		Users: res.Users,
+		Users:    res.Users,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -85,7 +85,7 @@ func (h *TeamsHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	response := &models.CreateTeamResponse{
 		TeamName: res.TeamName,
-		Users: res.Users,
+		Users:    res.Users,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

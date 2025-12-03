@@ -20,11 +20,12 @@ type PullRequest interface {
 	CreatePullRequest(ctx context.Context, pulReq *models.PullRequest) (*models.PullRequest, error)
 	MergePullRequest(ctx context.Context, pullReqID uuid.UUID) (*models.PullRequestMerge, error)
 	ReassignPullRequest(ctx context.Context, reassignReq *models.ReassignPullRequest) (*models.ReassignPullRequestResponse, error)
+	GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.GetPullRequestReviewResponse, error)
 }
 
 func NewPullReq(rp *repo.PullReq) PullRequest {
 	return &pullReq{
-		rp : rp,
+		rp: rp,
 	}
 }
 
@@ -53,4 +54,8 @@ func (p *pullReq) MergePullRequest(ctx context.Context, pullReqID uuid.UUID) (*m
 
 func (p *pullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.ReassignPullRequest) (*models.ReassignPullRequestResponse, error) {
 	return p.rp.ReassignPullRequest(ctx, reassignReq)
+}
+
+func (p *pullReq) GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.GetPullRequestReviewResponse, error) {
+	return p.rp.GetReview(ctx, reviewerID)
 }

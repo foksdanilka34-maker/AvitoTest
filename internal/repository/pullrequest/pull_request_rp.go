@@ -63,7 +63,6 @@ func (p *PullReq) CreatePullRequest(ctx context.Context, pulReq *models.PullRequ
 		pulReq.AssignedReviewes[1],
 		pulReqResult.PullReqID,
 		pulReq.AuthorID,
-
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error reviewers tx %v", err)
@@ -106,7 +105,7 @@ func (p *PullReq) CreatePullRequestShort(ctx context.Context, pulReq *models.Pul
 		&pulReqResult.AuthorID,
 		&pulReqResult.Status,
 		&pulReqResult.CreatedAt)
-	
+
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -152,7 +151,7 @@ func (p *PullReq) CreatePullRequestShort(ctx context.Context, pulReq *models.Pul
 	if len(pulReqResult.AssignedReviewes) == 0 {
 		return nil, fmt.Errorf("no reviewers were assigned to pr")
 	}
-	
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("error while comittin %v", err)
 	}
@@ -160,7 +159,7 @@ func (p *PullReq) CreatePullRequestShort(ctx context.Context, pulReq *models.Pul
 	return pulReqResult, nil
 }
 
-func (p *PullReq) MergePullRequest(ctx context.Context, pullRequestID uuid.UUID) (*models.PullRequestMerge, error){
+func (p *PullReq) MergePullRequest(ctx context.Context, pullRequestID uuid.UUID) (*models.PullRequestMerge, error) {
 	queryMergeRequest := `UPDATE pull_requests SET status = 'MERGED',
 							merged_at = COALESCE(merged_at, now())
 							WHERE request_id = $1
@@ -250,7 +249,7 @@ func (p *PullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 						)
 						ORDER BY random()
 						LIMIT 1;`
-	
+
 	var newReviewerID uuid.UUID
 	err = tx.QueryRow(ctx, queryReassignUser, reassignReq.PullRequestID, reassignReq.OldUserID).Scan(&newReviewerID)
 
@@ -262,7 +261,7 @@ func (p *PullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 						SET reviewer_id = $1,
 						assigned_at = NOW()
 						WHERE request_id = $2 AND reviewer_id = $3`
-	
+
 	tag, err := tx.Exec(ctx, queryUpdateUser, newReviewerID, reassignReq.PullRequestID, reassignReq.OldUserID)
 
 	if err != nil {
@@ -275,7 +274,7 @@ func (p *PullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 
 	querySelectAssignedReviewers := `SELECT reviewer_id FROM pr_reviewers
 									WHERE request_id = $1`
-	
+
 	rows, err := tx.Query(ctx, querySelectAssignedReviewers, reassignReq.PullRequestID)
 	if err != nil {
 		return nil, fmt.Errorf("error selecting users %v", err)
@@ -296,13 +295,42 @@ func (p *PullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 	}
 
 	reassignResponse := &models.ReassignPullRequestResponse{
-		PullRequestID: reassignReq.PullRequestID,
-		ReplacedByID: newReviewerID,
-		AuthorID: prAuthor,
-		Status: status,
+		PullRequestID:    reassignReq.PullRequestID,
+		ReplacedByID:     newReviewerID,
+		AuthorID:         prAuthor,
+		Status:           status,
 		AssignedReviewes: assignedReviewers,
 	}
 
 	return reassignResponse, nil
 }
 
+func (p *PullReq) GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.GetPullRequestReviewResponse, error) {
+	getPullRequestReview := `SELECT request_id, creator_id, request_name, status 
+							FROM pull_requests
+							WHERE request_id IN (
+								SELECT request_id FROM pr_reviewers WHERE
+								reviewer_id = ($1))`
+
+	rows, err := p.pgx.Query(ctx, getPullRequestReview, reviewerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user pr %v", err)
+	}
+
+	reviewerPR := &models.GetPullRequestReviewResponse{}
+	for rows.Next() {
+		userReviews := &models.GetPullRequestReview{}
+		err = rows.Scan(
+			&userReviews.PullReqID,
+			&userReviews.AuthorID,
+			&userReviews.PullReqName,
+			&userReviews.Status,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan pr's %v", err)
+		}
+		reviewerPR.PullRequests = append(reviewerPR.PullRequests, userReviews)
+	}
+
+	return reviewerPR, nil
+}

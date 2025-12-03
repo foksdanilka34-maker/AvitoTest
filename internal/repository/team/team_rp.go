@@ -89,7 +89,7 @@ func (t *Team) GetTeam(ctx context.Context, teamName string) (*models.Teams, err
 						FROM public.users
 						LEFT JOIN teams ON teams.team_id = users.team_id
 						WHERE teams.team_name = ($1)`
-	
+
 	rows, err := t.pgx.Query(ctx, querySelectUser, teamName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -116,7 +116,7 @@ func (t *Team) UserSetActive(ctx context.Context, userID uuid.UUID, isActive boo
 						   (SELECT team_name FROM teams WHERE teams.team_id = users.team_id) AS team_name`
 	user := &models.UserSetResponse{}
 	err := t.pgx.QueryRow(ctx, userActiveSetQuery, isActive, userID).Scan(
-		&user.UserID, &user.UserName, 
+		&user.UserID, &user.UserName,
 		&user.IsActive, &user.TeamName)
 
 	if err != nil {
