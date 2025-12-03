@@ -9,6 +9,7 @@ const (
 	TEAM_EXISTS = "TEAM_EXISTS"
     PR_EXISTS 
     PR_MERGED
+	MERGED = "MERGED"
     NOT_ASSIGNED
     NO_CANDIDATE
     NOT_FOUND
@@ -60,4 +61,26 @@ type PullRequest struct {
 	Status string 		`json:"status,omitempty"`
 	AssignedReviewes 	[]uuid.UUID `json:"assigned_reviewers,omitempty"`
 	CreatedAt *time.Time `json:"-"`
+}
+
+type PullRequestMerge struct {
+	PullReqID uuid.UUID `json:"pull_request_id,omitempty"`
+	AuthorID uuid.UUID `json:"author_id"`
+	PullReqName string `json:"pull_request_name"`
+	Status string 		`json:"status,omitempty"`
+	AssignedReviewes 	[]uuid.UUID `json:"assigned_reviewers,omitempty"`
+	MergedAt *time.Time `json:"merged_at,omitempty"`
+}
+
+type ReassignPullRequest struct {
+	PullRequestID uuid.UUID `json:"pull_request_id"`
+	OldUserID uuid.UUID		`json:"old_user_id"`
+}
+
+type ReassignPullRequestResponse struct {
+	PullRequestID 	uuid.UUID 		`json:"pull_request_id"`
+	ReplacedByID 	uuid.UUID		`json:"replaced_id"`
+	AuthorID 		uuid.UUID 		`json:"author_id"`
+	Status 			string 			`json:"status,omitempty"`
+	AssignedReviewes []uuid.UUID 	`json:"assigned_reviewers,omitempty"`
 }

@@ -8,6 +8,8 @@ import (
 	"slices"
 
 	"context"
+
+	"github.com/gofrs/uuid"
 )
 
 type pullReq struct {
@@ -16,6 +18,8 @@ type pullReq struct {
 
 type PullRequest interface {
 	CreatePullRequest(ctx context.Context, pulReq *models.PullRequest) (*models.PullRequest, error)
+	MergePullRequest(ctx context.Context, pullReqID uuid.UUID) (*models.PullRequestMerge, error)
+	ReassignPullRequest(ctx context.Context, reassignReq *models.ReassignPullRequest) (*models.ReassignPullRequestResponse, error)
 }
 
 func NewPullReq(rp *repo.PullReq) PullRequest {
@@ -41,4 +45,12 @@ func (p *pullReq) CreatePullRequest(ctx context.Context, pulReq *models.PullRequ
 		log.Println("pull Request called")
 		return p.rp.CreatePullRequest(ctx, pulReq)
 	}
+}
+
+func (p *pullReq) MergePullRequest(ctx context.Context, pullReqID uuid.UUID) (*models.PullRequestMerge, error) {
+	return p.rp.MergePullRequest(ctx, pullReqID)
+}
+
+func (p *pullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.ReassignPullRequest) (*models.ReassignPullRequestResponse, error) {
+	return p.rp.ReassignPullRequest(ctx, reassignReq)
 }
