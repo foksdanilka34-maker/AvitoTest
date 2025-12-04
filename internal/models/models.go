@@ -97,13 +97,35 @@ type GetPullRequestReviewResponse struct {
 }
 
 type Stats struct {
-	Name string `json:"name"`
-	OpenTasks int `json:"open_tasks"`
-	MergedTasks int `json:"merged_tasks"`
-	TotalTask int `json:"total_tasks"`
+	Name            string  `json:"name"`
+	OpenTasks       int     `json:"open_tasks"`
+	MergedTasks     int     `json:"merged_tasks"`
+	TotalTask       int     `json:"total_tasks"`
 	MergedTasksRate float64 `json:"merged_rate"`
 }
 
 type GetStatsResponse struct {
 	Stats []*Stats `json:"stats_response"`
+}
+
+type DeactivateMembers struct {
+	TeamName string      `json:"team_name"`
+	Members  []uuid.UUID `json:"member_id"`
+}
+
+type UsersDeactivate struct {
+	UserID    uuid.UUID `json:"user_id"`
+	RequestID uuid.UUID `json:"-"`
+	UserName  string    `json:"user_name"`
+}
+
+type ReassignResult struct {
+	OldUser   uuid.UUID `json:"old_user"`
+	NewUser   uuid.UUID `json:"new_user"`
+	RequestID uuid.UUID `json:"request_id"`
+}
+
+type TotalDeactivate struct {
+	TeamName     string            `json:"team_name"`
+	Replacements []*ReassignResult `json:"replacements"`
 }

@@ -69,7 +69,6 @@ func (t *Team) CreateTeam(ctx context.Context, teamName string, users []*models.
 			log.Println("failed to batch results", err)
 			return nil, fmt.Errorf("failed to batch results")
 		}
-		fmt.Println(user)
 		result = append(result, user)
 	}
 

@@ -27,6 +27,8 @@ func (h *PullRequestHandler) ReqisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pullRequest/merge", h.MergePullRequest)
 	mux.HandleFunc("POST /pullRequest/reassign", h.ReassignPullRequest)
 
+	mux.HandleFunc("POST /users/deactivateMembers", h.DeactivateMembers)
+
 	mux.HandleFunc("GET /users/getReview", h.GetReviewersRequests)
 	mux.HandleFunc("GET /users/stats", h.GetStats)
 }
@@ -104,10 +106,27 @@ func (h *PullRequestHandler) GetReviewersRequests(w http.ResponseWriter, r *http
 	json.NewEncoder(w).Encode(result)
 }
 
-func (h *PullRequestHandler) GetStats (w http.ResponseWriter, r *http.Request) {
+func (h *PullRequestHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	result, err := h.core.GetStats(r.Context())
 	if err != nil {
 		http.Error(w, "bd", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(result)
+}
+
+func (h *PullRequestHandler) DeactivateMembers(w http.ResponseWriter, r *http.Request) {
+	deactivateReq := &models.DeactivateMembers{}
+	if err := json.NewDecoder(r.Body).Decode(deactivateReq); err != nil {
+		http.Error(w, "bad data", http.StatusBadRequest)
+		return
+	}
+	result, err := h.core.DeactivateMembers(r.Context(), deactivateReq)
+	if err != nil {
+		log.Println("ERROR DEACTIVATING MEMBERS", err)
+		http.Error(w, "NO WORKING", http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

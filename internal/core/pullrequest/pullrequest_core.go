@@ -22,6 +22,7 @@ type PullRequest interface {
 	ReassignPullRequest(ctx context.Context, reassignReq *models.ReassignPullRequest) (*models.ReassignPullRequestResponse, error)
 	GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.GetPullRequestReviewResponse, error)
 	GetStats(ctx context.Context) (*models.GetStatsResponse, error)
+	DeactivateMembers(ctx context.Context, membersID *models.DeactivateMembers) (*models.TotalDeactivate, error)
 }
 
 func NewPullReq(rp *repo.PullReq) PullRequest {
@@ -60,7 +61,11 @@ func (p *pullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 func (p *pullReq) GetReview(ctx context.Context, reviewerID uuid.UUID) (*models.GetPullRequestReviewResponse, error) {
 	return p.rp.GetReview(ctx, reviewerID)
 }
- 
+
 func (p *pullReq) GetStats(ctx context.Context) (*models.GetStatsResponse, error) {
 	return p.rp.GetStats(ctx)
+}
+
+func (p *pullReq) DeactivateMembers(ctx context.Context, membersID *models.DeactivateMembers) (*models.TotalDeactivate, error) {
+	return p.rp.DeactivateMembers(ctx, membersID)
 }

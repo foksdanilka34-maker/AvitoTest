@@ -10,6 +10,7 @@ import (
 	"github.com/gofrs/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	_ "github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -346,7 +347,7 @@ func (p *PullReq) GetStats(ctx context.Context) (*models.GetStatsResponse, error
 					JOIN users u ON r.reviewer_id = u.user_id
 					WHERE pr.status IN ('OPEN', 'MERGED')  
 					GROUP BY u.user_name`
-	
+
 	rows, err := p.pgx.Query(ctx, queryStats)
 	if err != nil {
 		return nil, fmt.Errorf("error quuery stat scan %v", err)
@@ -368,4 +369,86 @@ func (p *PullReq) GetStats(ctx context.Context) (*models.GetStatsResponse, error
 		response.Stats = append(response.Stats, stats)
 	}
 	return response, nil
+}
+
+func (p *PullReq) DeactivateMembers(ctx context.Context, membersID *models.DeactivateMembers) (*models.TotalDeactivate, error) {
+	querySelectPrToDeactivate := `SELECT u.user_id, u.user_name, p.request_id FROM users u
+								JOIN pr_reviewers p ON p.reviewer_id = u.user_id
+								JOIN pull_requests pr ON p.request_id = pr.request_id
+								WHERE pr.status = 'OPEN' AND u.user_id = ANY($1)
+								AND u.team_id = (SELECT team_id FROM teams WHERE team_name = ($2))
+								AND u.is_active = TRUE`
+
+	tx, err := p.pgx.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(ctx, querySelectPrToDeactivate, membersID.Members, membersID.TeamName)
+	if err != nil {
+		return nil, fmt.Errorf("error query select users %v", err)
+	}
+
+	selectResult := []*models.UsersDeactivate{}
+	for rows.Next() {
+		members := &models.UsersDeactivate{}
+		err = rows.Scan(&members.UserID, &members.UserName, &members.RequestID)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning users %v", err)
+		}
+		selectResult = append(selectResult, members)
+	}
+
+	if len(selectResult) == 0 {
+		return nil, fmt.Errorf("empty data provided")
+	}
+
+	deactivateUsers := []uuid.UUID{}
+	for _, val := range selectResult {
+		deactivateUsers = append(deactivateUsers, val.UserID)
+	}
+
+	queryDeactivate := `UPDATE users SET is_active = false
+						WHERE user_id = ANY($1)`
+
+	tags, err := tx.Exec(ctx, queryDeactivate, deactivateUsers)
+	if err != nil {
+		return nil, fmt.Errorf("error exec users %v", err)
+	}
+	if tags.RowsAffected() == 0 {
+		return nil, fmt.Errorf("no users were updated")
+	}
+
+	reassignPr := []*models.ReassignPullRequest{}
+	for _, val := range selectResult {
+		reaPr := &models.ReassignPullRequest{}
+		reaPr.PullRequestID = val.RequestID
+		reaPr.OldUserID = val.UserID
+		reassignPr = append(reassignPr, reaPr)
+	}
+
+	resDeactiv := &models.TotalDeactivate{}
+	resDeactiv.TeamName = membersID.TeamName
+	for _, val := range reassignPr {
+		result, err := p.ReassignPullRequest(ctx, val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to reassign user %v", err)
+		}
+		raResult := &models.ReassignResult{
+			OldUser:   val.OldUserID,
+			NewUser:   result.ReplacedByID,
+			RequestID: result.PullRequestID,
+		}
+		resDeactiv.Replacements = append(resDeactiv.Replacements, raResult)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("error commiting deactivate %v", err)
+	}
+
+	if len(resDeactiv.Replacements) == 0 {
+		return nil, fmt.Errorf("0 values changed %v", err)
+	}
+	return resDeactiv, nil
 }
