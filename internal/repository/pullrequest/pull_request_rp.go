@@ -80,6 +80,7 @@ func (p *PullReq) CreatePullRequest(ctx context.Context, pulReq *models.PullRequ
 		}
 		pulReqResult.AssignedReviewes = append(pulReqResult.AssignedReviewes, reviewerID)
 	}
+	defer rows.Close()
 
 	if err := tx.Commit(ctx); err != nil {
 		log.Println(err)
@@ -171,6 +172,7 @@ func (p *PullReq) MergePullRequest(ctx context.Context, pullRequestID uuid.UUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to beign transaction %v", err)
 	}
+	defer tx.Rollback(ctx)
 
 	mergeRequest := &models.PullRequestMerge{}
 	err = tx.QueryRow(ctx, queryMergeRequest, pullRequestID).Scan(
@@ -200,6 +202,7 @@ func (p *PullReq) MergePullRequest(ctx context.Context, pullRequestID uuid.UUID)
 		}
 		mergeRequest.AssignedReviewes = append(mergeRequest.AssignedReviewes, reviewerId)
 	}
+	defer rows.Close()
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit %v", err)
@@ -280,6 +283,7 @@ func (p *PullReq) ReassignPullRequest(ctx context.Context, reassignReq *models.R
 	if err != nil {
 		return nil, fmt.Errorf("error selecting users %v", err)
 	}
+	defer rows.Close()
 
 	assignedReviewers := []uuid.UUID{}
 	for rows.Next() {
@@ -372,83 +376,132 @@ func (p *PullReq) GetStats(ctx context.Context) (*models.GetStatsResponse, error
 }
 
 func (p *PullReq) DeactivateMembers(ctx context.Context, membersID *models.DeactivateMembers) (*models.TotalDeactivate, error) {
-	querySelectPrToDeactivate := `SELECT u.user_id, u.user_name, p.request_id FROM users u
-								JOIN pr_reviewers p ON p.reviewer_id = u.user_id
-								JOIN pull_requests pr ON p.request_id = pr.request_id
-								WHERE pr.status = 'OPEN' AND u.user_id = ANY($1)
-								AND u.team_id = (SELECT team_id FROM teams WHERE team_name = ($2))
-								AND u.is_active = TRUE`
-
 	tx, err := p.pgx.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction %v", err)
 	}
 	defer tx.Rollback(ctx)
 
-	rows, err := tx.Query(ctx, querySelectPrToDeactivate, membersID.Members, membersID.TeamName)
+	queryDeactivateAndSelect := `
+        WITH deactivated AS (
+            UPDATE users SET is_active = false
+            WHERE user_id = ANY($1)
+            AND team_id = (SELECT team_id FROM teams WHERE team_name = $2)
+            AND is_active = TRUE
+            RETURNING user_id, user_name
+        )
+        SELECT d.user_id, d.user_name, pr.request_id, pr.creator_id
+        FROM deactivated d
+        JOIN pr_reviewers prr ON prr.reviewer_id = d.user_id
+        JOIN pull_requests pr ON pr.request_id = prr.request_id
+        WHERE pr.status = 'OPEN'`
+
+	rows, err := tx.Query(ctx, queryDeactivateAndSelect, membersID.Members, membersID.TeamName)
 	if err != nil {
-		return nil, fmt.Errorf("error query select users %v", err)
+		return nil, fmt.Errorf("error deactivate and select %v", err)
 	}
 
-	selectResult := []*models.UsersDeactivate{}
+	type affectedPR struct {
+		userID    uuid.UUID
+		userName  string
+		requestID uuid.UUID
+		creatorID uuid.UUID
+	}
+
+	affectedPRs := []affectedPR{}
 	for rows.Next() {
-		members := &models.UsersDeactivate{}
-		err = rows.Scan(&members.UserID, &members.UserName, &members.RequestID)
+		var apr affectedPR
+		err = rows.Scan(&apr.userID, &apr.userName, &apr.requestID, &apr.creatorID)
 		if err != nil {
-			return nil, fmt.Errorf("error scanning users %v", err)
+			return nil, fmt.Errorf("error scanning affected pr %v", err)
 		}
-		selectResult = append(selectResult, members)
+		affectedPRs = append(affectedPRs, apr)
+	}
+	rows.Close()
+
+	if len(affectedPRs) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("error commiting deactivate %v", err)
+		}
+		return &models.TotalDeactivate{
+			TeamName:     membersID.TeamName,
+			Replacements: []*models.ReassignResult{},
+		}, nil
 	}
 
-	if len(selectResult) == 0 {
-		return nil, fmt.Errorf("empty data provided")
+	querySelectNewReviewer := `
+        SELECT u.user_id
+        FROM users u
+        WHERE u.team_id = (SELECT team_id FROM users WHERE user_id = $1)
+        AND u.user_id != $1
+        AND u.user_id != $2
+        AND u.is_active = TRUE
+        AND u.user_id NOT IN (
+            SELECT reviewer_id FROM pr_reviewers WHERE request_id = $3
+        )
+        ORDER BY random()
+        LIMIT 1`
+
+	selectBatch := &pgx.Batch{}
+	for _, apr := range affectedPRs {
+		selectBatch.Queue(querySelectNewReviewer, apr.creatorID, apr.userID, apr.requestID)
 	}
 
-	deactivateUsers := []uuid.UUID{}
-	for _, val := range selectResult {
-		deactivateUsers = append(deactivateUsers, val.UserID)
-	}
+	selectResults := tx.SendBatch(ctx, selectBatch)
 
-	queryDeactivate := `UPDATE users SET is_active = false
-						WHERE user_id = ANY($1)`
-
-	tags, err := tx.Exec(ctx, queryDeactivate, deactivateUsers)
-	if err != nil {
-		return nil, fmt.Errorf("error exec users %v", err)
-	}
-	if tags.RowsAffected() == 0 {
-		return nil, fmt.Errorf("no users were updated")
-	}
-
-	reassignPr := []*models.ReassignPullRequest{}
-	for _, val := range selectResult {
-		reaPr := &models.ReassignPullRequest{}
-		reaPr.PullRequestID = val.RequestID
-		reaPr.OldUserID = val.UserID
-		reassignPr = append(reassignPr, reaPr)
-	}
-
-	resDeactiv := &models.TotalDeactivate{}
-	resDeactiv.TeamName = membersID.TeamName
-	for _, val := range reassignPr {
-		result, err := p.ReassignPullRequest(ctx, val)
+	newReviewers := make([]uuid.UUID, len(affectedPRs))
+	for i := range affectedPRs {
+		var newReviewerID uuid.UUID
+		err = selectResults.QueryRow().Scan(&newReviewerID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to reassign user %v", err)
+			selectResults.Close()
+			return nil, fmt.Errorf("error selecting new reviewer for PR %v: %v", affectedPRs[i].requestID, err)
 		}
-		raResult := &models.ReassignResult{
-			OldUser:   val.OldUserID,
-			NewUser:   result.ReplacedByID,
-			RequestID: result.PullRequestID,
-		}
-		resDeactiv.Replacements = append(resDeactiv.Replacements, raResult)
+		newReviewers[i] = newReviewerID
 	}
+	selectResults.Close()
+
+	queryUpdateReviewer := `
+        UPDATE pr_reviewers
+        SET reviewer_id = $1, assigned_at = NOW()
+        WHERE request_id = $2 AND reviewer_id = $3`
+
+	updateBatch := &pgx.Batch{}
+	for i, apr := range affectedPRs {
+		updateBatch.Queue(queryUpdateReviewer, newReviewers[i], apr.requestID, apr.userID)
+	}
+
+	updateResults := tx.SendBatch(ctx, updateBatch)
+
+	for i := range affectedPRs {
+		tag, err := updateResults.Exec()
+		if err != nil {
+			updateResults.Close()
+			return nil, fmt.Errorf("error updating reviewer %v", err)
+		}
+		if tag.RowsAffected() == 0 {
+			updateResults.Close()
+			return nil, fmt.Errorf("no rows updated for PR %v", affectedPRs[i].requestID)
+		}
+	}
+	updateResults.Close()
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("error commiting deactivate %v", err)
 	}
 
-	if len(resDeactiv.Replacements) == 0 {
-		return nil, fmt.Errorf("0 values changed %v", err)
+	resDeactiv := &models.TotalDeactivate{
+		TeamName:     membersID.TeamName,
+		Replacements: make([]*models.ReassignResult, len(affectedPRs)),
 	}
+
+	for i, apr := range affectedPRs {
+		resDeactiv.Replacements[i] = &models.ReassignResult{
+			OldUser:   apr.userID,
+			NewUser:   newReviewers[i],
+			RequestID: apr.requestID,
+		}
+	}
+
 	return resDeactiv, nil
 }
